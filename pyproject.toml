@@ -1,0 +1,14 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "music-categorizer"
+version = "2.0.0"
+description = "Genre and mood classification for music using audio features and PyTorch"
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.10"
+
+[tool.setuptools]
+packages = ["music_categorizer"]

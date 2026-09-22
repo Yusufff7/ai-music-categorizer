@@ -5,18 +5,21 @@ import joblib
 import torch
 from sklearn.metrics import classification_report
 
-from utils import load_dataframe, prepare_dataset
-from model_trainer import train_model, MusicGenreModel
+from music_categorizer.data import load_dataframe, prepare_dataset
+from music_categorizer.genre_trainer import train_model
+from music_categorizer.models import MusicGenreModel
+from music_categorizer.paths import ENSEMBLE_DIR, ENSEMBLE_RESULTS_DIR
 
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 N_MODELS = 10
-ENSEMBLE_DIR = 'data/ensemble_models'
-ENSEMBLE_PRED_PATH = 'data/ensemble_genre_predictions.tsv'
-ENSEMBLE_REPORT_PATH = 'data/ensemble_report.txt'
+ENSEMBLE_PRED_PATH = ENSEMBLE_RESULTS_DIR / 'ensemble_genre_predictions.tsv'
+ENSEMBLE_REPORT_PATH = ENSEMBLE_RESULTS_DIR / 'ensemble_report.txt'
 
-os.makedirs(ENSEMBLE_DIR, exist_ok=True)
 
 def run_ensemble_training():
+    os.makedirs(ENSEMBLE_DIR, exist_ok=True)
+    os.makedirs(ENSEMBLE_RESULTS_DIR, exist_ok=True)
+
     print("Loading dataset...")
     df = load_dataframe(tag_type='genre')
     X, y, mlb, scaler, _ = prepare_dataset(df, 'main_genres')
@@ -48,7 +51,7 @@ def run_ensemble_training():
     avg_preds = np.mean(all_preds, axis=0)
 
     print("Loading thresholds from final model...")
-    thresholds = joblib.load(os.path.join(ENSEMBLE_DIR, f'genre_thresholds.pkl'))
+    thresholds = joblib.load(ENSEMBLE_DIR / 'genre_thresholds.pkl')
     threshold_arr = np.array([thresholds[g] for g in mlb.classes_])
     y_pred_bin = (avg_preds > threshold_arr).astype(int)
 

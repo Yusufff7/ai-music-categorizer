@@ -1,5 +1,7 @@
 import joblib
 
+from music_categorizer.paths import GENRE_THRESHOLDS_PATH
+
 def edit_thresholds(file_path, updates):
     thresholds = joblib.load(file_path)
     print("Original thresholds:")
@@ -14,7 +16,7 @@ def edit_thresholds(file_path, updates):
     print(f"Updated thresholds saved to {file_path}")
 
 if __name__ == "__main__":
-    path = 'data/genre_thresholds.pkl'
+    path = GENRE_THRESHOLDS_PATH
     changes = {
         'pop': 0.37,
         'soundtrack': 0.26,

@@ -1,7 +1,8 @@
 import os
 import pandas as pd
 from collections import Counter
-from utils import MAIN_GENRES, SUBGENRE_MAP
+from music_categorizer.genres import MAIN_GENRES, SUBGENRE_MAP
+from music_categorizer.paths import TAGS_TSV, RESULTS_DIR
 
 def analyze_genre_stats(tsv_path):
     # Load the TSV file
@@ -72,7 +73,7 @@ def analyze_genre_stats(tsv_path):
     
     return results
 
-def save_analysis_report(results, output_dir='data/distribution'):
+def save_analysis_report(results, output_dir=RESULTS_DIR / 'genre_distribution'):
     os.makedirs(output_dir, exist_ok=True)
     
     # Save genre statistics
@@ -107,7 +108,7 @@ def save_analysis_report(results, output_dir='data/distribution'):
     print(f"Analysis reports saved to {output_dir} directory")
 
 if __name__ == "__main__":
-    tsv_path = os.path.join('data', 'raw_30s_cleantags.tsv')
+    tsv_path = TAGS_TSV
     
     print(f"Analyzing genre statistics in {tsv_path}...")
     results = analyze_genre_stats(tsv_path)

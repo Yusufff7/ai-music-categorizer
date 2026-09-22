@@ -1,74 +1,15 @@
 import os
 import numpy as np
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
 from torch.utils.data import DataLoader, TensorDataset
 from sklearn.metrics import f1_score, precision_recall_curve
 import joblib
 import matplotlib.pyplot as plt
 
+from music_categorizer.models import MusicGenreModel, WeightedBCELoss
+from music_categorizer.paths import GENRE_RESULTS_DIR
+
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
-
-class MusicGenreModel(nn.Module):
-    def __init__(self, input_dim, num_classes):
-        super().__init__()
-        self.dense1 = nn.Linear(input_dim, 2048)
-        self.bn1 = nn.BatchNorm1d(2048)
-        self.dropout1 = nn.Dropout(0.4)
-
-        self.attention = nn.Linear(2048, 2048)
-
-        # Genre branches (metal, punk, blues)
-        def branch():
-            return nn.Sequential(
-                nn.Linear(2048, 256),
-                nn.SiLU(),
-                nn.Linear(256, 256),
-                nn.Sigmoid()
-            )
-        self.metal_branch = branch()
-        self.punk_branch = branch()
-        self.blues_branch = branch()
-
-        self.final_dense = nn.Linear(2048 + 256*3, 768)
-        self.bn2 = nn.BatchNorm1d(768)
-        self.dropout2 = nn.Dropout(0.4)
-        self.output_layer = nn.Linear(768, num_classes)
-
-    def forward(self, x):
-        x = F.silu(self.dense1(x))
-        x = self.bn1(x)
-        x = self.dropout1(x)
-
-        att = torch.sigmoid(self.attention(x))
-        x_att = x * att
-
-        metal_feat = self.metal_branch(x_att)
-        punk_feat = self.punk_branch(x_att)
-        blues_feat = self.blues_branch(x_att)
-
-        x_concat = torch.cat([x_att, metal_feat, punk_feat, blues_feat], dim=1)
-
-        x = F.silu(self.final_dense(x_concat))
-        x = self.bn2(x)
-        x = self.dropout2(x)
-
-        out = torch.sigmoid(self.output_layer(x))
-        return out
-
-
-class WeightedBCELoss(nn.Module):
-    def __init__(self, weights=None):
-        super().__init__()
-        self.weights = weights  # tensor shape [num_classes]
-
-    def forward(self, y_pred, y_true):
-        loss = F.binary_cross_entropy(y_pred, y_true, reduction='none')
-        if self.weights is not None:
-            loss = loss * self.weights
-        return loss.mean()
 
 
 def compute_balanced_weights(class_freqs, smoothing=0.15):
@@ -114,13 +55,26 @@ def find_optimal_thresholds(model, dataloader, y_true, mlb, label_freqs):
     plt.ylabel('F1 Score')
     plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
     plt.tight_layout()
-    os.makedirs('data', exist_ok=True)
-    plt.savefig('data/threshold_analysis.png')
+    os.makedirs(GENRE_RESULTS_DIR, exist_ok=True)
+    plt.savefig(GENRE_RESULTS_DIR / 'threshold_analysis.png')
     plt.close()
     return thresholds
 
 
-def train_model(X, y, mlb, model_path, mlb_path, scaler_path=None, scaler=None):
+# Per-genre multipliers applied on top of the inverse-frequency class weights
+DEFAULT_MANUAL_BOOSTS = {
+    'punk': 4.0, 'country': 4.0, 'industrial': 3.5,
+    'blues': 3.0, 'reggae': 2.8, 'metal': 3.0,
+    'jazz': 2.5, 'lounge': 2.3, 'world': 2.3, 'rnb': 2.0,
+    'folk': 2.0, 'hiphop': 2.0,
+    'classical': 2.0, 'rock': 2.0,
+    'electronic': 0.4, 'pop': 1.8, 'soundtrack': 2.5,
+    'alternative': 3.5
+}
+
+
+def train_model(X, y, mlb, model_path, mlb_path, scaler_path=None, scaler=None,
+                manual_boosts=None, epochs=150):
     X_np = X.numpy() if torch.is_tensor(X) else np.array(X)
     y_np = y.numpy() if torch.is_tensor(y) else np.array(y)
     input_dim = X_np.shape[1]
@@ -148,15 +102,8 @@ def train_model(X, y, mlb, model_path, mlb_path, scaler_path=None, scaler=None):
     class_weights_dict = compute_balanced_weights(class_freqs)
 
     class_weights = torch.tensor([class_weights_dict[genre] for genre in mlb.classes_], dtype=torch.float32).to(device)
-    manual_boosts = {
-        'punk': 4.0, 'country': 4.0, 'industrial': 3.5,
-        'blues': 3.0, 'reggae': 2.8, 'metal': 3.0,
-        'jazz': 2.5, 'lounge': 2.3, 'world': 2.3, 'rnb': 2.0,
-        'folk': 2.0, 'hiphop': 2.0,
-        'classical': 2.0, 'rock': 2.0,
-        'electronic': 0.4, 'pop': 1.8, 'soundtrack': 2.5,
-        'alternative': 3.5
-    }
+    if manual_boosts is None:
+        manual_boosts = DEFAULT_MANUAL_BOOSTS
     for i, genre in enumerate(mlb.classes_):
         if genre in manual_boosts:
             class_weights[i] *= manual_boosts[genre]
@@ -169,7 +116,6 @@ def train_model(X, y, mlb, model_path, mlb_path, scaler_path=None, scaler=None):
     optimizer = torch.optim.Adam(model.parameters(), lr=3e-4)
     criterion = WeightedBCELoss(class_weights)
 
-    epochs = 150
     best_val_f1 = 0
     patience = 50
     patience_counter = 0
@@ -239,7 +185,4 @@ def train_model(X, y, mlb, model_path, mlb_path, scaler_path=None, scaler=None):
 
     print("\n[COMPLETE] Training finished")
     print(f"Model saved to {model_path}")
-
-
-if __name__ == "__main__":
-    pass
+    return {'val_macro_f1': best_val_f1, 'thresholds': thresholds}

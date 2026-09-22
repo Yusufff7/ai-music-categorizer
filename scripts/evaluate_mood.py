@@ -3,8 +3,10 @@ import torch
 import numpy as np
 import pandas as pd
 from sklearn.metrics import classification_report
-from mood_trainer import MoodClassifier
-from utils import load_dataframe, prepare_dataset
+
+from music_categorizer.models import MoodClassifier
+from music_categorizer.data import load_dataframe, prepare_dataset
+from music_categorizer.paths import MOOD_MODEL_PATH, MOOD_RESULTS_DIR
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -22,7 +24,7 @@ def evaluate_model():
     num_classes = y.shape[1]
 
     model = MoodClassifier(input_dim, num_classes).to(device)
-    model.load_state_dict(torch.load('data/mood_model.pt'))
+    model.load_state_dict(torch.load(MOOD_MODEL_PATH, map_location=device))
     model.eval()
 
     print("Running predictions...")
@@ -38,7 +40,8 @@ def evaluate_model():
     print(report)
 
     # Save raw probabilities per class
-    prob_output_path = 'data/mood_predictions_detailed.tsv'
+    os.makedirs(MOOD_RESULTS_DIR, exist_ok=True)
+    prob_output_path = MOOD_RESULTS_DIR / 'mood_predictions_detailed.tsv'
     prob_df = pd.DataFrame(y_pred_probs, columns=mlb.classes_)
     prob_df.to_csv(prob_output_path, sep='\t', index=False)
     print(f"Saved raw predictions to {prob_output_path}")
@@ -56,8 +59,9 @@ def evaluate_model():
     if 'PATH' in df.columns:
         results_df['filename'] = df['PATH']
 
-    results_df.to_csv('data/mood_predictions_vs_truth.tsv', sep='\t', index=False)
-    print("Saved predictions vs. truth to data/mood_predictions_vs_truth.tsv")
+    results_path = MOOD_RESULTS_DIR / 'mood_predictions_vs_truth.tsv'
+    results_df.to_csv(results_path, sep='\t', index=False)
+    print(f"Saved predictions vs. truth to {results_path}")
 
 
 if __name__ == "__main__":

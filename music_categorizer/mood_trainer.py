@@ -1,32 +1,13 @@
-import os
 import numpy as np
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 from torch.utils.data import DataLoader, TensorDataset
 from sklearn.metrics import accuracy_score
 import joblib
 
+from music_categorizer.models import MoodClassifier
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
-
-class MoodClassifier(nn.Module):
-    def __init__(self, input_dim, num_classes):
-        super().__init__()
-        self.model = nn.Sequential(
-            nn.Linear(input_dim, 1024),
-            nn.BatchNorm1d(1024),
-            nn.ReLU(),
-            nn.Dropout(0.3),
-            nn.Linear(1024, 256),
-            nn.ReLU(),
-            nn.Dropout(0.3),
-            nn.Linear(256, num_classes)
-        )
-
-    def forward(self, x):
-        return self.model(x)
 
 
 def train_model(X, y, mlb, model_path, mlb_path, scaler_path=None, scaler=None):
@@ -106,7 +87,3 @@ def train_model(X, y, mlb, model_path, mlb_path, scaler_path=None, scaler=None):
     joblib.dump(mlb, mlb_path)
     if scaler is not None and scaler_path is not None:
         joblib.dump(scaler, scaler_path)
-
-
-if __name__ == "__main__":
-    pass 

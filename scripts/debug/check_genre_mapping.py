@@ -1,5 +1,6 @@
 import pandas as pd
-from utils import infer_main_genres, MAIN_GENRES, SUBGENRE_MAP  
+from music_categorizer.data import infer_main_genres
+from music_categorizer.genres import MAIN_GENRES, SUBGENRE_MAP
 
 def run_test_case(input_genres, case_name):
     """Tests your EXACT infer_main_genres() function with visualization"""

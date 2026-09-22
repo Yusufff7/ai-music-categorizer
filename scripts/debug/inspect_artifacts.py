@@ -2,14 +2,17 @@ import joblib
 import torch
 import matplotlib.pyplot as plt
 import numpy as np
-from model_trainer import MusicGenreModel  # Adjust import if needed
 from tabulate import tabulate
 
-# === Hardcoded file paths (EDIT) ===
-threshold_path = ''
-mlb_path = ''
-scaler_path = ''
-model_path = ''
+from music_categorizer.models import MusicGenreModel
+from music_categorizer.paths import (GENRE_THRESHOLDS_PATH, GENRE_MLB_PATH,
+                                     GENRE_SCALER_PATH, GENRE_MODEL_PATH)
+
+# Point these at other artifacts (e.g. an ensemble member) to inspect them instead
+threshold_path = GENRE_THRESHOLDS_PATH
+mlb_path = GENRE_MLB_PATH
+scaler_path = GENRE_SCALER_PATH
+model_path = GENRE_MODEL_PATH
 
 # Load thresholds
 thresholds = joblib.load(threshold_path)
@@ -47,7 +50,7 @@ print("Num features:", len(scaler.mean_))
 input_dim = len(scaler.mean_)
 num_classes = len(mlb.classes_)
 model = MusicGenreModel(input_dim, num_classes)
-model.load_state_dict(torch.load(model_path))
+model.load_state_dict(torch.load(model_path, map_location='cpu'))
 model.eval()
 
 # Print output layer biases

@@ -1,79 +1,20 @@
-import os
 import numpy as np
 import pandas as pd
-import librosa
 from sklearn.preprocessing import MultiLabelBinarizer, StandardScaler
-from config.genres import MAIN_GENRES, SUBGENRE_MAP
-from joblib import Parallel, delayed 
-from datetime import datetime
-from psutil import virtual_memory  
+from joblib import Parallel, delayed
+from psutil import virtual_memory
 from tqdm import tqdm
 
-def print_step(message, level=1):
-    """Helper function for consistent step printing"""
-    prefix = "  " * (level-1) + "↳" if level > 1 else ""
-    timestamp = datetime.now().strftime("%H:%M:%S")
-    print(f"[{timestamp}] {prefix} {message}")
-
-AUDIO_DIR = os.path.join('data', 'audio')
-FEATURE_DIR = os.path.join('data', 'features')
-os.makedirs(FEATURE_DIR, exist_ok=True)
-
-def extract_features_cached(filepath):
-    cache_path = os.path.join(FEATURE_DIR, filepath.replace('/', '__') + '.npy')
-    if os.path.exists(cache_path):
-        #print_step(f"Loading cached features for {filepath}", 2)
-        return np.load(cache_path)
-
-    try:
-        print_step(f"Extracting features for {filepath}", 2)
-        full_path = os.path.join(AUDIO_DIR, filepath)
- 
-        # Add file validation
-        if not os.path.exists(full_path) or os.path.getsize(full_path) == 0:
-            print_step(f"Invalid file: {filepath}", 2)
-            return None
-               
-        print_step("Loading audio file...", 3)
-        y, sr = librosa.load(full_path, sr=22050, duration=30)
-
-        print_step("Extracting comprehensive features...", 3)
-        features = {
-            # Spectral/Timbre
-            'mfcc': librosa.feature.mfcc(y=y, sr=sr, n_mfcc=20),
-            'spectral_contrast': librosa.feature.spectral_contrast(y=y, sr=sr),
-            'spectral_flatness': librosa.feature.spectral_flatness(y=y),
-            'zero_crossing_rate': librosa.feature.zero_crossing_rate(y=y),
-            
-            # Harmonic
-            'chroma_cqt': librosa.feature.chroma_cqt(y=y, sr=sr),
-            'tonnetz': librosa.feature.tonnetz(y=y, sr=sr),
-            
-            # Rhythm
-            'tempogram': librosa.feature.tempogram(onset_envelope=librosa.onset.onset_strength(y=y, sr=sr)),
-            'tempo': librosa.beat.tempo(y=y, sr=sr)[0]
-        }
-        
-        # Aggregate features
-        feature_vector = np.concatenate([
-            np.mean(feat, axis=1) if isinstance(feat, np.ndarray) 
-            else [feat]  # For scalar values like tempo
-            for feat in features.values()
-        ])
-        
-        print_step(f"Caching features to {cache_path}", 3)
-        np.save(cache_path, feature_vector)
-        return feature_vector
-        
-    except Exception as e:
-        print_step(f"Error processing {filepath}: {e}", 2)
-        return None
+from music_categorizer.genres import MAIN_GENRES, SUBGENRE_MAP
+from music_categorizer.features import extract_features_cached
+from music_categorizer.paths import TAGS_TSV
+from music_categorizer.utils import print_step
 
 def load_dataframe(tag_type):
     print_step(f"Loading dataframe for tag type: {tag_type}")
     
     print_step("Reading raw TSV file...", 2)
-    with open(os.path.join('data', 'raw_30s_cleantags.tsv'), 'r', encoding='utf-8') as f:
+    with open(TAGS_TSV, 'r', encoding='utf-8') as f:
         lines = [line.strip('\r\n') for line in f.readlines()]
     print_step(f"Found {len(lines)} entries in raw data", 2)
     
@@ -252,12 +193,3 @@ def infer_main_genres(row):
             unmapped_subgenres.add(g)  # Track but don't include
     
     return list(main_genres), unmapped_subgenres
-    
-def compute_balanced_weights(class_freqs, smoothing=0.15):
-    inv_freq = {k: 1 / (v + 1e-6) for k, v in class_freqs.items()}
-    max_inv = max(inv_freq.values())
-    weights = {k: (v / max_inv) for k, v in inv_freq.items()}  # Normalize to [0, 1]
-    weights = {k: smoothing + (1 - smoothing) * w for k, w in weights.items()}  # Smooth
-    return weights
-
-

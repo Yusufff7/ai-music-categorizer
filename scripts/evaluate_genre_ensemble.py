@@ -4,17 +4,19 @@ import numpy as np
 import pandas as pd
 from sklearn.metrics import classification_report
 import joblib
-from model_trainer import MusicGenreModel
-from utils import load_dataframe, prepare_dataset
+
+from music_categorizer.models import MusicGenreModel
+from music_categorizer.data import load_dataframe, prepare_dataset
+from music_categorizer.paths import ENSEMBLE_DIR, ENSEMBLE_RESULTS_DIR
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
 def evaluate_model(model_idx, df, report_file):
-    model_path = f'data/ensemble_models/model_{model_idx}.pt'
-    mlb_path = f'data/ensemble_models/mlb_{model_idx}.pkl'
-    scaler_path = f'data/ensemble_models/scaler_{model_idx}.pkl'
-    thresholds_path = f'data/ensemble_models/genre_thresholds.pkl' 
+    model_path = ENSEMBLE_DIR / f'model_{model_idx}.pt'
+    mlb_path = ENSEMBLE_DIR / f'mlb_{model_idx}.pkl'
+    scaler_path = ENSEMBLE_DIR / f'scaler_{model_idx}.pkl'
+    thresholds_path = ENSEMBLE_DIR / 'genre_thresholds.pkl'
 
     print(f"Evaluating model {model_idx}...")
 
@@ -31,7 +33,7 @@ def evaluate_model(model_idx, df, report_file):
 
     # Load and run model
     model = MusicGenreModel(input_dim, num_classes).to(device)
-    model.load_state_dict(torch.load(model_path))
+    model.load_state_dict(torch.load(model_path, map_location=device))
     model.eval()
 
     with torch.no_grad():
@@ -54,7 +56,8 @@ def evaluate_model(model_idx, df, report_file):
 
 
 if __name__ == "__main__":
-    output_path = 'data/ensemble_models/ensemble_full.txt'
+    os.makedirs(ENSEMBLE_RESULTS_DIR, exist_ok=True)
+    output_path = ENSEMBLE_RESULTS_DIR / 'ensemble_full.txt'
     if os.path.exists(output_path):
         os.remove(output_path)
 

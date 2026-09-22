@@ -4,8 +4,10 @@ import numpy as np
 import pandas as pd
 from sklearn.metrics import classification_report
 import joblib
-from model_trainer import MusicGenreModel
-from utils import load_dataframe, prepare_dataset
+
+from music_categorizer.models import MusicGenreModel
+from music_categorizer.data import load_dataframe, prepare_dataset
+from music_categorizer.paths import GENRE_MODEL_PATH, GENRE_THRESHOLDS_PATH, GENRE_RESULTS_DIR
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -23,7 +25,7 @@ def evaluate_model():
     num_classes = y.shape[1]
 
     model = MusicGenreModel(input_dim, num_classes).to(device)
-    model.load_state_dict(torch.load('data/genre_model.pt'))
+    model.load_state_dict(torch.load(GENRE_MODEL_PATH, map_location=device))
     model.eval()
 
     print("Running predictions...")
@@ -31,7 +33,7 @@ def evaluate_model():
         y_pred = model(X_tensor).cpu().numpy()
 
     print("Loading thresholds...")
-    thresholds = joblib.load('data/genre_thresholds.pkl')
+    thresholds = joblib.load(GENRE_THRESHOLDS_PATH)
     threshold_arr = np.array([thresholds[g] for g in mlb.classes_])
     y_pred_bin = (y_pred > threshold_arr).astype(int)
 
@@ -40,7 +42,8 @@ def evaluate_model():
     print(report)
 
     # Save raw probabilities
-    prob_output_path = 'data/genre_predictions_detailed.tsv'
+    os.makedirs(GENRE_RESULTS_DIR, exist_ok=True)
+    prob_output_path = GENRE_RESULTS_DIR / 'genre_predictions_detailed.tsv'
     prob_df = pd.DataFrame(y_pred, columns=mlb.classes_)
     prob_df.to_csv(prob_output_path, sep='\t', index=False)
     print(f"Saved raw predictions to {prob_output_path}")
@@ -58,8 +61,9 @@ def evaluate_model():
     if 'filename' in df.columns:
         results_df['filename'] = df['filename']
 
-    results_df.to_csv('data/genre_predictions_vs_truth.tsv', sep='\t', index=False)
-    print("Saved predictions vs. truth to data/genre_predictions_vs_truth.tsv")
+    results_path = GENRE_RESULTS_DIR / 'genre_predictions_vs_truth.tsv'
+    results_df.to_csv(results_path, sep='\t', index=False)
+    print(f"Saved predictions vs. truth to {results_path}")
 
 
 if __name__ == "__main__":

@@ -1,17 +1,15 @@
 import copy
+import os
+import tempfile
 import numpy as np
-from model_trainer import train_model
+
+from music_categorizer.data import load_dataframe, prepare_dataset
+from music_categorizer.genre_trainer import train_model, DEFAULT_MANUAL_BOOSTS
+
+
 def run_random_boost_search(X, y, mlb, scaler, trials=30):
     genres = list(mlb.classes_)
-    base_boosts = {
-        'punk': 4.0, 'country': 4.0, 'industrial': 3.5,
-        'blues': 3.0, 'reggae': 2.8, 'metal': 3.0,
-        'jazz': 2.5, 'lounge': 2.3, 'world': 2.3, 'rnb': 2.0,
-        'folk': 2.0, 'hiphop': 2.0,
-        'classical': 2.0, 'rock': 2.0,
-        'electronic': 0.4, 'pop': 1.8, 'soundtrack': 2.5,
-        'alternative': 3.5
-    }
+    base_boosts = DEFAULT_MANUAL_BOOSTS
     boost_ranges = {g: (0.3, 6.0) for g in genres}
 
     def sample_random_boosts():
@@ -32,13 +30,15 @@ def run_random_boost_search(X, y, mlb, scaler, trials=30):
         for g in sorted(boosts):
             print(f"  {g:12s}: {boosts[g]:.3f}")
 
-        metrics = train_model(
-            X, y, mlb,
-            manual_boosts=boosts,
-            scaler=scaler,
-            epochs=25,
-            verbose=False
-        )
+        # Trial models are throwaway, so write them to a temp dir instead of models/
+        with tempfile.TemporaryDirectory() as tmp:
+            metrics = train_model(
+                X, y, mlb,
+                model_path=os.path.join(tmp, 'genre_model.pt'),
+                mlb_path=os.path.join(tmp, 'mlb_genre.pkl'),
+                manual_boosts=boosts,
+                epochs=25
+            )
 
         macro_f1 = metrics['val_macro_f1']
         print(f"  Validation Macro F1: {macro_f1:.4f}")
@@ -54,3 +54,9 @@ def run_random_boost_search(X, y, mlb, scaler, trials=30):
     print(f"Best validation macro F1: {best_macro_f1:.4f}")
 
     return best_boosts
+
+
+if __name__ == "__main__":
+    df = load_dataframe(tag_type='genre')
+    X, y, mlb, scaler, _ = prepare_dataset(df, 'main_genres')
+    run_random_boost_search(X, y, mlb, scaler)
